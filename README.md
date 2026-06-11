@@ -45,24 +45,6 @@ python3 main.py
 | `MODEL` | Model to use | `gpt-4o-mini` |
 | `DATABASE_URL` | SQLAlchemy database URL | SQLite (local) |
 
-## Project Structure
-
-```
-.
-├── main.py              # Entry point
-├── src/bot/
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── admin.py
-│   ├── bot.py
-│   ├── config.py
-│   ├── database.py
-│   ├── memory.py
-│   └── openai_service.py
-├── pyproject.toml
-└── README.md
-```
-
 ## Admin Commands
 
 - `/admin` - Open admin panel
