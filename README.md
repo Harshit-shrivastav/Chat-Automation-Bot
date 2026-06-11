@@ -50,6 +50,13 @@ python3 main.py
 - `/admin` - Open admin panel
 - `*` (trigger) - Toggle chat on/off
 
+## Free Resources
+
+- **Bot Hosting**: Free Telegram bot hosting available at [bothost.ru](https://bothost.ru/)
+- **AI API**: Free OpenAI-compatible API available at [aionlabs.ai](https://www.aionlabs.ai/)
+
+Both services offer free quotas. Not affiliated with this project — availability may change.
+
 ## License
 
 MIT
