@@ -1,4 +1,3 @@
-"""OpenAI-compatible API service for AI chat."""
 import logging
 import re
 from datetime import datetime, timezone

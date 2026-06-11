@@ -1,4 +1,3 @@
-"""Configuration management for the bot."""
 import os
 from pathlib import Path
 

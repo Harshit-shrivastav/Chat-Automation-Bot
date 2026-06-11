@@ -1,4 +1,3 @@
-"""Database models and operations."""
 from typing import Optional
 
 from sqlalchemy import Column, Integer, String, Text

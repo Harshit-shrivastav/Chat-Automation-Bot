@@ -1,4 +1,3 @@
-"""Admin panel handlers."""
 import logging
 
 from aiogram import Bot, Router, F

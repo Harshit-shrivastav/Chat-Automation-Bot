@@ -1,4 +1,3 @@
-"""Main bot handlers."""
 import asyncio
 import logging
 import time

@@ -1,4 +1,3 @@
-"""Main entry point for the Telegram AI bot."""
 import logging
 import sys
 

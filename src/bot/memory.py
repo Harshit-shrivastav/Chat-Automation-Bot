@@ -1,4 +1,3 @@
-"""Memory extraction and management."""
 import asyncio
 import logging
 import re
