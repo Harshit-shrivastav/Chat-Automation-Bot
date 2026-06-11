@@ -1,0 +1,17 @@
+[project]
+name = "chat-automation-bot"
+version = "0.1.0"
+description = "Telegram Business chat automation with AI responses"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram==3.28.2",
+    "httpx==0.28.1",
+    "python-dotenv==1.2.1",
+    "sqlalchemy==2.0.41",
+]
+
+[project.optional-dependencies]
+dev = []
+
+[tool.uv]
+dev-dependencies = []
