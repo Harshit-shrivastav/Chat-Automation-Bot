@@ -32,9 +32,7 @@ cp .env.example .env
 
 4. Run the bot:
 ```bash
-python -m bot
-# or
-telegram-bot
+python3 main.py
 ```
 
 ## Configuration
@@ -50,16 +48,19 @@ telegram-bot
 ## Project Structure
 
 ```
-src/bot/
-├── __init__.py          # Package init
-├── __main__.py          # Entry point
-├── admin.py             # Admin panel handlers
-├── bot.py               # Main bot handlers
-├── config.py            # Configuration
-├── database.py          # Database models
-├── memory.py            # Memory management
-├── openai_service.py    # AI API integration
-└── main.py              # Application entry
+.
+├── main.py              # Entry point
+├── src/bot/
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── admin.py
+│   ├── bot.py
+│   ├── config.py
+│   ├── database.py
+│   ├── memory.py
+│   └── openai_service.py
+├── pyproject.toml
+└── README.md
 ```
 
 ## Admin Commands
