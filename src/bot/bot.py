@@ -25,8 +25,21 @@ processed_messages: dict[tuple[int, int], float] = {}
 
 active_connections: dict[str, int] = {}
 admin_ids: set[int] = set()
-my_name: str = "User"
-bot_name: str = "AI Assistant"
+class BotState:
+    my_name: str = "User"
+    bot_name: str = "AI Assistant"
+
+    @classmethod
+    def set_my_name(cls, name: str) -> None:
+        cls.my_name = name
+
+    @classmethod
+    def set_bot_name(cls, name: str) -> None:
+        cls.bot_name = name
+
+
+my_name = "User"
+bot_name = "AI Assistant"
 
 openai_service = OpenAIService()
 memory_manager = MemoryManager()
@@ -112,9 +125,8 @@ async def handle_business_connection(bc: BusinessConnection, bot: Bot) -> None:
     if bc.is_enabled:
         try:
             chat = await bot.get_chat(bc.user_chat_id)
-            global my_name
-            my_name = chat.first_name or "User"
-            logger.info("Admin name set to: %s", my_name)
+            BotState.set_my_name(chat.first_name or "User")
+            logger.info("Admin name set to: %s", BotState.my_name)
         except Exception:
             logger.exception("Failed to get admin name")
 
@@ -147,11 +159,10 @@ async def handle_business_message(message: Message, bot: Bot) -> None:
                 active_connections[bc_id] = bc_info.user_chat_id
                 admin_ids.add(bc_info.user_chat_id)
                 database.add_admin_id(bc_info.user_chat_id)
-                if not my_name:
+                if not BotState.my_name:
                     chat = await bot.get_chat(bc_info.user_chat_id)
-                    global my_name
-                    my_name = chat.first_name or "User"
-                    logger.info("Admin name set to: %s", my_name)
+                    BotState.set_my_name(chat.first_name or "User")
+                    logger.info("Admin name set to: %s", BotState.my_name)
         except Exception:
             logger.exception("Failed to get business connection info")
 
@@ -344,9 +355,8 @@ async def start_bot() -> None:
     bot = Bot(token=config.BOT_TOKEN)
 
     me = await bot.get_me()
-    global bot_name
-    bot_name = me.first_name
-    logger.info("Bot name: %s", bot_name)
+    BotState.set_bot_name(me.first_name)
+    logger.info("Bot name: %s", BotState.bot_name)
 
     admin_ids.update(database.get_admin_ids())
     logger.info("Loaded admin IDs: %s", admin_ids)

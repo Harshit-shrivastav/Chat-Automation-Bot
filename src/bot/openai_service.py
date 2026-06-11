@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 
 def get_variables() -> dict[str, str]:
     now = datetime.now(timezone.utc)
-    from . import bot as bot_module
+    from .bot import BotState
     return {
-        "my_name": bot_module.my_name,
-        "bot_name": bot_module.bot_name,
+        "my_name": BotState.my_name,
+        "bot_name": BotState.bot_name,
         "date": now.strftime("%Y-%m-%d"),
         "time": now.strftime("%H:%M UTC"),
         "day": now.strftime("%A"),
