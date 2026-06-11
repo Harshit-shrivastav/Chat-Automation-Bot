@@ -1,11 +1,12 @@
+"""Memory extraction and management."""
 import asyncio
 import logging
 import re
 
 import httpx
 
-import config
-import database
+from .config import config
+from . import admin
 
 logger = logging.getLogger(__name__)
 
@@ -34,45 +35,43 @@ class MemoryManager:
         self.client = httpx.AsyncClient(timeout=60.0)
 
     def read_memory(self) -> str:
-        import admin as admin_module
-        return database.read_memory()[:admin_module.get_max_memory_chars()]
+        from . import database
+        return database.read_memory()[:admin.get_max_memory_chars()]
 
     def read_info(self) -> str:
-        import admin as admin_module
-        return database.read_info()[:admin_module.get_max_info_chars()]
+        from . import database
+        return database.read_info()[:admin.get_max_info_chars()]
 
-    def _append(self, key: str, content: str):
+    def _append(self, key: str, content: str) -> None:
+        from . import database
         existing = database.read_setting(key)
-        existing_items = set()
-        for line in existing.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("- "):
-                existing_items.add(stripped.lower())
+        existing_items = {
+            line.strip() for line in existing.splitlines()
+            if line.strip().startswith("- ")
+        }
 
-        new_items = []
-        for line in content.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("- ") and stripped.lower() not in existing_items:
-                new_items.append(stripped)
+        new_items = [
+            line.strip() for line in content.splitlines()
+            if line.strip().startswith("- ") and line.strip() not in existing_items
+        ]
 
         if new_items:
             updated = existing + "\n" + "\n".join(new_items)
             updated = updated.strip()
-            import admin as admin_module
-            if key == "memory" and len(updated) > admin_module.get_max_memory_chars():
+
+            max_chars = admin.get_max_memory_chars() if key == "memory" else admin.get_max_info_chars()
+            if len(updated) > max_chars:
                 lines = updated.splitlines()
                 updated = "\n".join(lines[-50:])
-            elif key == "info" and len(updated) > admin_module.get_max_info_chars():
-                lines = updated.splitlines()
-                updated = "\n".join(lines[-30:])
+
             database.write_setting(key, updated)
 
-    async def extract(self, messages: list[dict]):
+    async def extract(self, messages: list[dict]) -> None:
         recent = messages[-10:]
-        conversation = ""
-        for m in recent:
-            tag = "User" if m["role"] == "user" else "Bot"
-            conversation += f"{tag}: {m['content']}\n"
+        conversation = "\n".join(
+            f"{'User' if m['role'] == 'user' else 'Bot'}: {m['content']}"
+            for m in recent
+        )
 
         payload = {
             "model": config.MODEL,
@@ -84,9 +83,7 @@ class MemoryManager:
         }
 
         try:
-            resp = await self.client.post(
-                self.url, headers=self.headers, json=payload
-            )
+            resp = await self.client.post(self.url, headers=self.headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
             message = data["choices"][0]["message"]

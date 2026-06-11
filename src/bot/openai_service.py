@@ -1,3 +1,4 @@
+"""OpenAI-compatible API service for AI chat."""
 import logging
 import re
 from datetime import datetime, timezone
@@ -5,15 +6,16 @@ from typing import Optional
 
 import httpx
 
-import config
-import database
-import bot as bot_module
+from .config import config
+from . import database
+from . import admin
 
 logger = logging.getLogger(__name__)
 
 
 def get_variables() -> dict[str, str]:
     now = datetime.now(timezone.utc)
+    from . import bot as bot_module
     return {
         "my_name": bot_module.my_name,
         "bot_name": bot_module.bot_name,
@@ -45,7 +47,6 @@ class OpenAIService:
         memory: str = "",
         sender_info: str = "",
     ) -> Optional[str]:
-        import admin
         system = load_system_prompt()
         if sender_info:
             system += f"\n\nYou are talking to:\n{sender_info}"
@@ -62,9 +63,7 @@ class OpenAIService:
         }
 
         try:
-            resp = await self.client.post(
-                self.url, headers=self.headers, json=payload
-            )
+            resp = await self.client.post(self.url, headers=self.headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
             message = data["choices"][0]["message"]

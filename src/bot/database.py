@@ -1,8 +1,11 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text
+"""Database models and operations."""
+from typing import Optional
+
+from sqlalchemy import Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-import config
+from .config import config
 
 Base = declarative_base()
 
@@ -22,7 +25,7 @@ class Memory(Base):
     content = Column(Text, default="")
 
 
-class Settings(Base):
+class SettingsTable(Base):
     __tablename__ = "settings"
 
     id = Column(Integer, primary_key=True)
@@ -41,10 +44,10 @@ engine = None
 Session = None
 
 
-def init_db():
+def init_db() -> None:
     global engine, Session
     db_url = config.DATABASE_URL or "sqlite:///data.db"
-    engine = create_engine(db_url, echo=False)
+    engine = create_engine(db_url)
     Session = sessionmaker(bind=engine)
     Base.metadata.create_all(engine)
 
@@ -62,7 +65,7 @@ def read_info() -> str:
         session.close()
 
 
-def write_info(content: str):
+def write_info(content: str) -> None:
     session = get_session()
     try:
         info = session.query(Info).first()
@@ -76,20 +79,19 @@ def write_info(content: str):
         session.close()
 
 
-def read_memory(user_id: int = None) -> str:
+def read_memory(user_id: Optional[int] = None) -> str:
     session = get_session()
     try:
         if user_id:
             mem = session.query(Memory).filter_by(user_id=user_id).first()
-            return mem.content if mem else ""
         else:
             mem = session.query(Memory).first()
-            return mem.content if mem else ""
+        return mem.content if mem else ""
     finally:
         session.close()
 
 
-def write_memory(user_id: int, content: str):
+def write_memory(user_id: int, content: str) -> None:
     session = get_session()
     try:
         mem = session.query(Memory).filter_by(user_id=user_id).first()
@@ -106,20 +108,20 @@ def write_memory(user_id: int, content: str):
 def read_setting(key: str) -> str:
     session = get_session()
     try:
-        setting = session.query(Settings).filter_by(key=key).first()
+        setting = session.query(SettingsTable).filter_by(key=key).first()
         return setting.value if setting else ""
     finally:
         session.close()
 
 
-def write_setting(key: str, value: str):
+def write_setting(key: str, value: str) -> None:
     session = get_session()
     try:
-        setting = session.query(Settings).filter_by(key=key).first()
+        setting = session.query(SettingsTable).filter_by(key=key).first()
         if setting:
             setting.value = value
         else:
-            setting = Settings(key=key, value=value)
+            setting = SettingsTable(key=key, value=value)
             session.add(setting)
         session.commit()
     finally:
@@ -129,13 +131,12 @@ def write_setting(key: str, value: str):
 def is_chat_disabled(chat_id: int) -> bool:
     session = get_session()
     try:
-        disabled = session.query(DisabledChat).filter_by(chat_id=chat_id).first()
-        return disabled is not None
+        return session.query(DisabledChat).filter_by(chat_id=chat_id).first() is not None
     finally:
         session.close()
 
 
-def set_chat_disabled(chat_id: int):
+def set_chat_disabled(chat_id: int) -> None:
     session = get_session()
     try:
         existing = session.query(DisabledChat).filter_by(chat_id=chat_id).first()
@@ -146,7 +147,7 @@ def set_chat_disabled(chat_id: int):
         session.close()
 
 
-def set_chat_enabled(chat_id: int):
+def set_chat_enabled(chat_id: int) -> None:
     session = get_session()
     try:
         disabled = session.query(DisabledChat).filter_by(chat_id=chat_id).first()
@@ -157,16 +158,16 @@ def set_chat_enabled(chat_id: int):
         session.close()
 
 
-def add_admin_id(admin_id: int):
+def add_admin_id(admin_id: int) -> None:
     session = get_session()
     try:
-        existing = session.query(Settings).filter_by(key="admin_ids").first()
+        existing = session.query(SettingsTable).filter_by(key="admin_ids").first()
         if existing:
-            ids = set(int(x) for x in existing.value.split(",") if x.strip())
+            ids = {int(x) for x in existing.value.split(",") if x.strip()}
             ids.add(admin_id)
             existing.value = ",".join(str(x) for x in ids)
         else:
-            setting = Settings(key="admin_ids", value=str(admin_id))
+            setting = SettingsTable(key="admin_ids", value=str(admin_id))
             session.add(setting)
         session.commit()
     finally:
@@ -176,9 +177,12 @@ def add_admin_id(admin_id: int):
 def get_admin_ids() -> set[int]:
     session = get_session()
     try:
-        setting = session.query(Settings).filter_by(key="admin_ids").first()
+        setting = session.query(SettingsTable).filter_by(key="admin_ids").first()
         if setting and setting.value:
-            return set(int(x) for x in setting.value.split(",") if x.strip())
+            return {int(x) for x in setting.value.split(",") if x.strip()}
         return set()
     finally:
         session.close()
+
+
+from sqlalchemy import create_engine

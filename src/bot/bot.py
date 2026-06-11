@@ -1,15 +1,17 @@
+"""Main bot handlers."""
 import asyncio
 import logging
+import time
+from typing import Optional
 
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import CommandStart
 from aiogram.types import Message, BusinessConnection
 
-import config
-import admin
-import database
-from memory import MemoryManager
-from openai_service import OpenAIService
+from . import admin
+from . import database
+from .memory import MemoryManager
+from .openai_service import OpenAIService
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,7 @@ def get_history(key: int) -> list[dict]:
     return chat_histories[key]
 
 
-def add_to_history(key: int, role: str, content: str):
+def add_to_history(key: int, role: str, content: str) -> None:
     history = get_history(key)
     history.append({"role": role, "content": content})
     if len(history) > admin.get_max_history():
@@ -67,7 +69,7 @@ def build_sender_profile(message: Message) -> str:
     return "\n".join(parts)
 
 
-def handle_admin_chat_control(user_id: int, text: str, chat_id: int) -> str | None:
+def handle_admin_chat_control(user_id: int, text: str, chat_id: int) -> Optional[str]:
     if text == admin.get_chat_toggle_trigger():
         if database.is_chat_disabled(chat_id):
             database.set_chat_enabled(chat_id)
@@ -78,7 +80,7 @@ def handle_admin_chat_control(user_id: int, text: str, chat_id: int) -> str | No
     return None
 
 
-async def keep_typing(bot: Bot, chat_id: int, business_connection_id: str | None = None):
+async def keep_typing(bot: Bot, chat_id: int, business_connection_id: Optional[str] = None) -> None:
     try:
         await asyncio.sleep(1.0)
         while True:
@@ -91,20 +93,16 @@ async def keep_typing(bot: Bot, chat_id: int, business_connection_id: str | None
         pass
 
 
-async def send_reply(bot: Bot, message: Message, reply: str):
+async def send_reply(bot: Bot, message: Message, reply: str) -> None:
     bc_id = message.business_connection_id
     if bc_id:
-        await bot.send_message(
-            chat_id=message.chat.id,
-            text=reply,
-            business_connection_id=bc_id,
-        )
+        await bot.send_message(chat_id=message.chat.id, text=reply, business_connection_id=bc_id)
     else:
         await message.answer(reply)
 
 
 @router.business_connection()
-async def handle_business_connection(bc: BusinessConnection, bot: Bot):
+async def handle_business_connection(bc: BusinessConnection, bot: Bot) -> None:
     active_connections[bc.id] = bc.user_chat_id
     admin_ids.add(bc.user_chat_id)
     database.add_admin_id(bc.user_chat_id)
@@ -114,6 +112,7 @@ async def handle_business_connection(bc: BusinessConnection, bot: Bot):
     if bc.is_enabled:
         try:
             chat = await bot.get_chat(bc.user_chat_id)
+            global my_name
             my_name = chat.first_name or "User"
             logger.info("Admin name set to: %s", my_name)
         except Exception:
@@ -121,22 +120,19 @@ async def handle_business_connection(bc: BusinessConnection, bot: Bot):
 
 
 @router.business_message(F.text & F.business_connection_id)
-async def handle_business_message(message: Message, bot: Bot):
+async def handle_business_message(message: Message, bot: Bot) -> None:
     bc_id = message.business_connection_id
     if not bc_id:
         return
 
     msg_key = (message.chat.id, message.message_id)
-    import time
     now = time.time()
     if msg_key in processed_messages:
-        logger.info("Message %d from chat %d already processed, skipping", message.message_id, message.chat.id)
+        logger.info("Message %d already processed, skipping", message.message_id)
         return
     processed_messages[msg_key] = now
     if len(processed_messages) > 500:
-        cutoff = now - 60
-        processed_messages.copy()
-        processed_messages.update({k: v for k, v in processed_messages.items() if v > cutoff})
+        processed_messages.update({k: v for k, v in processed_messages.items() if v > now - 60})
 
     text = message.text
     if not text:
@@ -153,6 +149,7 @@ async def handle_business_message(message: Message, bot: Bot):
                 database.add_admin_id(bc_info.user_chat_id)
                 if not my_name:
                     chat = await bot.get_chat(bc_info.user_chat_id)
+                    global my_name
                     my_name = chat.first_name or "User"
                     logger.info("Admin name set to: %s", my_name)
         except Exception:
@@ -175,18 +172,14 @@ async def handle_business_message(message: Message, bot: Bot):
     logger.info("Business msg from %s (id=%d): %s", sender_name, sender_id, text[:50])
 
     if admin.is_paused():
-        fallback = admin.get_fallback_message()
-        logger.info("Bot paused, sending fallback")
-        await send_reply(bot, message, fallback)
+        await send_reply(bot, message, admin.get_fallback_message())
         return
-
-    history_key = sender_id
 
     profile = build_sender_profile(message)
     if profile:
         sender_profiles[sender_id] = profile
 
-    add_to_history(history_key, "user", text)
+    add_to_history(sender_id, "user", text)
 
     typing = asyncio.create_task(keep_typing(bot, message.chat.id, bc_id))
     try:
@@ -194,10 +187,8 @@ async def handle_business_message(message: Message, bot: Bot):
         async with lock:
             memory = memory_manager.read_memory()
             sender_info = sender_profiles.get(sender_id, "")
-            history = get_history(history_key)
-            reply = await openai_service.chat(
-                history, memory=memory, sender_info=sender_info
-            )
+            history = get_history(sender_id)
+            reply = await openai_service.chat(history, memory=memory, sender_info=sender_info)
     finally:
         typing.cancel()
         try:
@@ -210,13 +201,13 @@ async def handle_business_message(message: Message, bot: Bot):
         return
 
     logger.info("Replying to %s: %s", sender_name, reply[:50])
-    add_to_history(history_key, "assistant", reply)
+    add_to_history(sender_id, "assistant", reply)
 
     try:
         await send_reply(bot, message, reply)
         logger.info("Reply sent successfully")
     except Exception:
-        logger.exception("Failed to send reply to %s", sender_name)
+        logger.exception("Failed to send reply")
 
     message_counts[sender_id] = message_counts.get(sender_id, 0) + 1
     if message_counts[sender_id] % admin.get_memory_extract_interval() == 0:
@@ -224,14 +215,11 @@ async def handle_business_message(message: Message, bot: Bot):
 
 
 @router.message(CommandStart())
-async def handle_start(message: Message):
+async def handle_start(message: Message) -> None:
     if message.from_user.id in admin_ids:
         admin.pending_input.pop(message.from_user.id, None)
         status = "PAUSED" if admin.is_paused() else "RUNNING"
-        await message.answer(
-            f"Admin Panel — Bot: {status}",
-            reply_markup=admin.panel_keyboard(),
-        )
+        await message.answer(f"Admin Panel — Bot: {status}", reply_markup=admin.panel_keyboard())
     else:
         await message.answer(
             "Hey! I'm your AI assistant.\n\n"
@@ -242,20 +230,18 @@ async def handle_start(message: Message):
 
 
 @router.message(F.text & F.chat.type == "private")
-async def handle_direct_message(message: Message, bot: Bot):
+async def handle_direct_message(message: Message, bot: Bot) -> None:
     if message.business_connection_id:
         return
 
     msg_key = (message.chat.id, message.message_id)
-    import time
     now = time.time()
     if msg_key in processed_messages:
-        logger.info("Message %d from chat %d already processed, skipping", message.message_id, message.chat.id)
+        logger.info("Message %d already processed, skipping", message.message_id)
         return
     processed_messages[msg_key] = now
     if len(processed_messages) > 500:
-        cutoff = now - 60
-        processed_messages.update({k: v for k, v in processed_messages.items() if v > cutoff})
+        processed_messages.update({k: v for k, v in processed_messages.items() if v > now - 60})
 
     text = message.text
     if not text:
@@ -274,12 +260,13 @@ async def handle_direct_message(message: Message, bot: Bot):
             return
         if message.from_user.id in admin.pending_input:
             action = admin.pending_input.pop(message.from_user.id)
-            if action == "edit_info":
-                database.write_info(text.strip())
-                await message.answer("Info updated.")
-            elif action == "edit_memory":
-                database.write_setting("memory", text.strip())
-                await message.answer("Memory updated.")
+            handlers = {
+                "edit_info": lambda: database.write_info(text.strip()),
+                "edit_memory": lambda: database.write_setting("memory", text.strip()),
+            }
+            if action in handlers:
+                handlers[action]()
+                await message.answer(f"{action.replace('edit_', '').title()} updated.")
             elif action == "set_fallback":
                 database.write_setting("fallback_message", text.strip())
                 await message.answer("Fallback message updated.")
@@ -303,15 +290,11 @@ async def handle_direct_message(message: Message, bot: Bot):
                 await message.answer(f"Trigger set to: {text.strip()}")
             return
         status = "PAUSED" if admin.is_paused() else "RUNNING"
-        await message.answer(
-            f"Admin Panel — Bot: {status}",
-            reply_markup=admin.panel_keyboard(),
-        )
+        await message.answer(f"Admin Panel — Bot: {status}", reply_markup=admin.panel_keyboard())
         return
 
     if admin.is_paused():
-        fallback = admin.get_fallback_message()
-        await message.answer(fallback)
+        await message.answer(admin.get_fallback_message())
         return
 
     if database.is_chat_disabled(message.from_user.id):
@@ -348,7 +331,7 @@ async def handle_direct_message(message: Message, bot: Bot):
         asyncio.create_task(run_memory_extraction(user_id))
 
 
-async def run_memory_extraction(key: int):
+async def run_memory_extraction(key: int) -> None:
     history = get_history(key)
     try:
         await memory_manager.extract(history)
@@ -356,10 +339,12 @@ async def run_memory_extraction(key: int):
         logger.exception("Memory extraction failed for key %d", key)
 
 
-async def start_bot():
+async def start_bot() -> None:
+    from .config import config
     bot = Bot(token=config.BOT_TOKEN)
 
     me = await bot.get_me()
+    global bot_name
     bot_name = me.first_name
     logger.info("Bot name: %s", bot_name)
 

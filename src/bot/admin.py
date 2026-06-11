@@ -1,19 +1,17 @@
+"""Admin panel handlers."""
 import logging
 
 from aiogram import Bot, Router, F
 from aiogram.filters import Command
-from aiogram.types import (
-    Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
-)
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
-import database
+from . import database
 
 logger = logging.getLogger(__name__)
 
 router = Router()
 
 pending_input: dict[int, str] = {}
-
 bot_paused = False
 
 MAX_HISTORY = 15
@@ -51,10 +49,6 @@ def get_fallback_message() -> str:
 
 def get_chat_toggle_trigger() -> str:
     return database.read_setting("chat_toggle_trigger") or CHAT_TOGGLE_TRIGGER
-
-
-def set_fallback_message(text: str):
-    database.write_setting("fallback_message", text)
 
 
 def is_paused() -> bool:
@@ -109,10 +103,7 @@ async def cmd_admin(message: Message):
         return
     pending_input.pop(message.from_user.id, None)
     status = "PAUSED" if bot_paused else "RUNNING"
-    await message.answer(
-        f"Admin Panel — Bot: {status}",
-        reply_markup=panel_keyboard(),
-    )
+    await message.answer(f"Admin Panel — Bot: {status}", reply_markup=panel_keyboard())
 
 
 @router.callback_query(F.data.startswith("admin_"))
@@ -126,25 +117,20 @@ async def handle_admin_callback(callback: CallbackQuery, bot: Bot):
 
     if data == "admin_read_info":
         content = database.read_info()
-        text = content if content else "(empty)"
-        await callback.message.answer(f"Info:\n\n{text}")
+        await callback.message.answer(f"Info:\n\n{content or '(empty)'}")
         await callback.answer()
 
     elif data == "admin_read_memory":
         content = database.read_setting("memory")
-        text = content if content else "(empty)"
-        await callback.message.answer(f"Memory:\n\n{text}")
+        await callback.message.answer(f"Memory:\n\n{content or '(empty)'}")
         await callback.answer()
 
     elif data == "admin_edit_info":
         pending_input[callback.from_user.id] = "edit_info"
-        from openai_service import get_variables
-        vars = get_variables()
-        var_list = "\n".join(f"  {{{k}}} = {v}" for k, v in vars.items())
+        from .openai_service import get_variables
+        var_list = "\n".join(f"  {{{k}}} = {v}" for k, v in get_variables().items())
         await callback.message.answer(
-            "Send new system prompt for info.\n\n"
-            f"Available variables:\n{var_list}\n\n"
-            "Use them like: You are {{my_name}}."
+            f"Send new system prompt for info.\n\nAvailable variables:\n{var_list}\n\nUse them like: You are {{my_name}}."
         )
         await callback.answer()
 
@@ -154,23 +140,16 @@ async def handle_admin_callback(callback: CallbackQuery, bot: Bot):
         await callback.answer()
 
     elif data == "admin_read_fallback":
-        msg = get_fallback_message()
-        await callback.message.answer(f"Fallback message:\n\n{msg}")
+        await callback.message.answer(f"Fallback message:\n\n{get_fallback_message()}")
         await callback.answer()
 
     elif data == "admin_settings":
-        await callback.message.edit_text(
-            "Bot Settings:",
-            reply_markup=settings_keyboard(),
-        )
+        await callback.message.edit_text("Bot Settings:", reply_markup=settings_keyboard())
         await callback.answer()
 
     elif data == "admin_back":
         status = "PAUSED" if bot_paused else "RUNNING"
-        await callback.message.edit_text(
-            f"Admin Panel — Bot: {status}",
-            reply_markup=panel_keyboard(),
-        )
+        await callback.message.edit_text(f"Admin Panel — Bot: {status}", reply_markup=panel_keyboard())
         await callback.answer()
 
     elif data == "admin_edit_max_history":
@@ -204,16 +183,9 @@ async def handle_admin_callback(callback: CallbackQuery, bot: Bot):
         await callback.answer()
 
     elif data == "admin_pause_toggle":
-        if bot_paused:
-            bot_paused = False
-            status = "RUNNING"
-        else:
-            bot_paused = True
-            status = "PAUSED"
-        await callback.message.edit_text(
-            f"Admin Panel — Bot: {status}",
-            reply_markup=panel_keyboard(),
-        )
+        bot_paused = not bot_paused
+        status = "PAUSED" if bot_paused else "RUNNING"
+        await callback.message.edit_text(f"Admin Panel — Bot: {status}", reply_markup=panel_keyboard())
         await callback.answer(f"Bot {status}")
 
     elif data == "admin_stop":

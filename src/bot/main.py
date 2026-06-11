@@ -1,10 +1,11 @@
+"""Main entry point for the Telegram AI bot."""
 import logging
 import sys
 
-import config
+from .config import config
 
 
-def validate_config():
+def validate_config() -> None:
     errors = []
     if not config.BOT_TOKEN:
         errors.append("BOT_TOKEN is not set")
@@ -16,7 +17,7 @@ def validate_config():
         sys.exit(1)
 
 
-def main():
+def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
@@ -24,13 +25,12 @@ def main():
 
     validate_config()
 
-    import database
+    from . import database
     database.init_db()
     logging.info("Database initialized")
 
+    from .bot import start_bot
     import asyncio
-    from bot import start_bot
-
     asyncio.run(start_bot())
 
 
