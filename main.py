@@ -2,7 +2,7 @@
 import logging
 import sys
 
-from .config import config
+from src.bot.config import config
 
 
 def validate_config() -> None:
@@ -25,11 +25,11 @@ def main() -> None:
 
     validate_config()
 
-    from . import database
+    from src.bot import database
     database.init_db()
     logging.info("Database initialized")
 
-    from .bot import start_bot
+    from src.bot.bot import start_bot
     import asyncio
     asyncio.run(start_bot())
 
